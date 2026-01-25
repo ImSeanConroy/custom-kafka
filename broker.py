@@ -17,6 +17,13 @@ API_METADATA = 3
 API_VERSIONS = 18
 
 # -------------------------------
+# Topic metadata
+# -------------------------------
+topics = {
+    "test": [0, 1]
+}
+
+# -------------------------------
 # Protocol helpers
 # -------------------------------
 def parse_request(client_socket: socket.socket) -> tuple[int, int, int, bytes] | None:
@@ -58,18 +65,35 @@ def handle_api_versions() -> bytes:
     return payload
 
 # -------------------------------
+# Metadata
+# -------------------------------
+def handle_metadata() -> bytes:
+    payload = len(topics).to_bytes(4, "big")
+    for topic, partitions in topics.items():
+        tb = topic.encode()
+        payload += len(tb).to_bytes(2, "big") + tb
+        payload += len(partitions).to_bytes(4, "big")
+        for p in partitions:
+            payload += p.to_bytes(4, "big")
+    return payload
+
+# -------------------------------
 # Client handler
 # -------------------------------
 def handle_client(client_socket: socket.socket, addr: Tuple[str, int]) -> None:
     try:
         request = parse_request(client_socket)
         if request:
-            api_key, api_version, correlation_id, _ = request
+            api_key, _, correlation_id, _ = request
+
             if api_key == API_VERSIONS:
-                payload = handle_api_versions()
-                send_response(client_socket, correlation_id, payload)
-            else:           
-                send_response(client_socket, correlation_id)
+                response_payload = handle_api_versions()
+            elif api_key == API_METADATA:
+                response_payload = handle_metadata()
+            else:
+                response_payload = b""
+                     
+            send_response(client_socket, correlation_id, response_payload)
     
     except Exception as e:
         print(f"[{addr[0]}:{addr[1]}] Error handling client: {e}")
