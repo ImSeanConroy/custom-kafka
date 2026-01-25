@@ -1,4 +1,6 @@
 import socket
+import threading
+from typing import Tuple
 
 # -------------------------------
 # Configuration
@@ -9,12 +11,10 @@ PORT = 9092
 # -------------------------------
 # Kafka API keys
 # -------------------------------
-API_KEYS = {
-    0: "Produce",
-    1: "Fetch",
-    3: "Metadata",
-    18: "ApiVersions"
-}
+API_PRODUCE = 0
+API_FETCH = 1
+API_METADATA = 3
+API_VERSIONS = 18
 
 # -------------------------------
 # Protocol helpers
@@ -44,6 +44,40 @@ def send_response(client_socket: socket.socket, correlation_id: int, payload: st
     client_socket.sendall(response)
 
 # -------------------------------
+# API versions
+# -------------------------------
+def handle_api_versions() -> bytes:
+    apis = [API_PRODUCE, API_FETCH, API_METADATA, API_VERSIONS]
+    payload = len(apis).to_bytes(4, "big")
+    for api in apis:
+        payload += (
+            api.to_bytes(2, "big") +
+            (0).to_bytes(2, "big") +
+            (1).to_bytes(2, "big")
+        )
+    return payload
+
+# -------------------------------
+# Client handler
+# -------------------------------
+def handle_client(client_socket: socket.socket, addr: Tuple[str, int]) -> None:
+    try:
+        request = parse_request(client_socket)
+        if request:
+            api_key, api_version, correlation_id, _ = request
+            if api_key == API_VERSIONS:
+                payload = handle_api_versions()
+                send_response(client_socket, correlation_id, payload)
+            else:           
+                send_response(client_socket, correlation_id)
+    
+    except Exception as e:
+        print(f"[{addr[0]}:{addr[1]}] Error handling client: {e}")
+        send_response(client_socket, 500, "Internal Server Error")
+    finally:
+        client_socket.close()
+
+# -------------------------------
 # Server loop
 # -------------------------------
 def main() -> None:
@@ -57,14 +91,11 @@ def main() -> None:
 
         while True:
             client_socket, addr = server_socket.accept()
-            
-            request = parse_request(client_socket)
-            if request:
-                api_key, api_version, correlation_id, _ = request
-                print("API:", API_KEYS.get(api_key, "Unknown"))
-                send_response(client_socket, correlation_id)
-
-            client_socket.close()
+            thread = threading.Thread(
+                target=handle_client,
+                args=(client_socket, addr),
+                daemon=True)
+            thread.start()
 
 if __name__ == "__main__":
     main()
