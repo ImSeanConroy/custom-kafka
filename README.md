@@ -27,10 +27,6 @@ HOST: 127.0.0.1
 PORT: 9092
 ```
 
-## Usage
-
-TODO
-
 ## License
 
 This project is Distributed under the MIT License - see the [LICENSE](LICENSE) file for information.
