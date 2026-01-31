@@ -82,6 +82,31 @@ def handle_metadata() -> bytes:
     return payload
 
 # -------------------------------
+# Produce
+# -------------------------------
+def handle_produce(payload: bytes) -> bytes:
+    topic_len = int.from_bytes(payload[0:2], "big")
+    topic = payload[2:2 + topic_len].decode()
+    idx = 2 + topic_len
+
+    partition = int.from_bytes(payload[idx:idx + 4], "big")
+    idx += 4
+
+    msg_len = int.from_bytes(payload[idx:idx + 4], "big")
+    idx += 4
+
+    message = payload[idx:idx + msg_len]
+
+    if topic not in topics or partition not in topics[topic]:
+        return b"\x01"  # error
+
+    filename = f"{DATA_DIR}/{topic}_{partition}.log"
+    with open(filename, "ab") as f:
+        f.write(len(message).to_bytes(4, "big") + message)
+
+    return b"\x00" 
+
+# -------------------------------
 # Fetch
 # -------------------------------
 def handle_fetch(payload: bytes) -> bytes:
@@ -117,6 +142,8 @@ def handle_client(client_socket: socket.socket, addr: Tuple[str, int]) -> None:
                 response_payload = handle_api_versions()
             elif api_key == API_METADATA:
                 response_payload = handle_metadata()
+            elif api_key == API_PRODUCE:
+                response_payload = handle_produce(payload)
             elif api_key == API_FETCH:
                 response_payload = handle_fetch(payload)
             else:
