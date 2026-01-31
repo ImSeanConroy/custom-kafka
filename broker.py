@@ -1,3 +1,4 @@
+import os
 import socket
 import threading
 from typing import Tuple
@@ -7,6 +8,9 @@ from typing import Tuple
 # -------------------------------
 HOST = "127.0.0.1"
 PORT = 9092
+DATA_DIR = "data"
+
+os.makedirs(DATA_DIR, exist_ok=True)
 
 # -------------------------------
 # Kafka API keys
@@ -78,18 +82,43 @@ def handle_metadata() -> bytes:
     return payload
 
 # -------------------------------
+# Fetch
+# -------------------------------
+def handle_fetch(payload: bytes) -> bytes:
+    topic_len = int.from_bytes(payload[0:2], "big")
+    topic = payload[2:2 + topic_len].decode()
+    partition = int.from_bytes(payload[2 + topic_len:6 + topic_len], "big")
+
+    filename = f"{DATA_DIR}/{topic}_{partition}.log"
+    if not os.path.exists(filename):
+        return b""
+
+    response = b""
+    with open(filename, "rb") as f:
+        while True:
+            size = f.read(4)
+            if not size:
+                break
+            msg_len = int.from_bytes(size, "big")
+            response += size + f.read(msg_len)
+
+    return response
+
+# -------------------------------
 # Client handler
 # -------------------------------
 def handle_client(client_socket: socket.socket, addr: Tuple[str, int]) -> None:
     try:
         request = parse_request(client_socket)
         if request:
-            api_key, _, correlation_id, _ = request
+            api_key, _, correlation_id, payload = request
 
             if api_key == API_VERSIONS:
                 response_payload = handle_api_versions()
             elif api_key == API_METADATA:
                 response_payload = handle_metadata()
+            elif api_key == API_FETCH:
+                response_payload = handle_fetch(payload)
             else:
                 response_payload = b""
                      
