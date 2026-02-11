@@ -32,7 +32,6 @@ while True:
 
         res_len = int.from_bytes(s.recv(4), "big")
         res = s.recv(res_len)
-        
         data = res[4:]
 
         offset = 0
